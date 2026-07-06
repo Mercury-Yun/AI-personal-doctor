@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AI私人医生
+GenericName=健康屏
+Comment=启动用药提醒与健康档案大屏
+Exec=bash @HOME@/AI-Personal-Doctor/scripts/launch-health-screen.sh
+Path=@HOME@/AI-Personal-Doctor
+Icon=preferences-system
+Terminal=false
+StartupNotify=true
+Categories=Utility;Medical;

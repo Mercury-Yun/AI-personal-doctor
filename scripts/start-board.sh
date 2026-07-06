@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# RK3588 板端一键启动（云端化版本：仅 FastAPI + 前端）
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ -f "$ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/.env"
+  set +a
+fi
+
+# 优先使用项目内 venv 的 Python：开机自启/桌面 kiosk 环境未激活 venv 时，
+# 系统 python3 缺少 uvicorn 等依赖会导致后端启动失败（No module named uvicorn）。
+PY="$ROOT/.venv/bin/python"
+[[ -x "$PY" ]] || PY="python3"
+
+API_PORT="${API_PORT:-8000}"
+WEB_PORT="${WEB_PORT:-5173}"
+OPEN_BROWSER="${OPEN_BROWSER:-0}"
+
+export REMINDER_ENABLED="${REMINDER_ENABLED:-1}"
+export REMINDER_TZ="${REMINDER_TZ:-Asia/Shanghai}"
+export TZ="${TZ:-Asia/Shanghai}"
+export CHAT_USE_CLOUD_LLM=1
+export DASHSCOPE_BASE_URL="${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
+export DASHSCOPE_MODEL="${DASHSCOPE_MODEL:-qwen-turbo}"
+export DASHSCOPE_VISION_MODEL="${DASHSCOPE_VISION_MODEL:-qwen-vl-max}"
+export TTS_USE_CLOUD=1
+export COSYVOICE_MODEL="${COSYVOICE_MODEL:-cosyvoice-v3-flash}"
+export COSYVOICE_VOICE="${COSYVOICE_VOICE:-longanhuan}"
+export COSYVOICE_FORMAT="${COSYVOICE_FORMAT:-wav}"
+export COSYVOICE_SAMPLE_RATE="${COSYVOICE_SAMPLE_RATE:-22050}"
+export COSYVOICE_SPEECH_RATE="${COSYVOICE_SPEECH_RATE:-1.05}"
+export COSYVOICE_BATCH_MAX_CHARS="${COSYVOICE_BATCH_MAX_CHARS:-160}"
+export COSYVOICE_FIRST_BATCH_CHARS="${COSYVOICE_FIRST_BATCH_CHARS:-36}"
+export CLOUD_WARMUP="${CLOUD_WARMUP:-1}"
+export TTS_PLAY_COMMAND="${TTS_PLAY_COMMAND:-aplay -D plughw:1,0 -q}"
+export WAKE_ENABLED="${WAKE_ENABLED:-1}"
+export VOICE_WAKE_WORD="${VOICE_WAKE_WORD:-小医}"
+
+log() { echo "[start-board] $*"; }
+
+rotate_logs() {
+  if [[ -x "$ROOT/scripts/rotate-logs.sh" ]]; then
+    bash "$ROOT/scripts/rotate-logs.sh" || true
+  fi
+}
+
+start_api() {
+  if pgrep -f "uvicorn backend.main:app" >/dev/null 2>&1; then
+    log "API 已在运行"
+    return
+  fi
+  log "启动 FastAPI ..."
+  # 必须在项目根目录启动，否则 uvicorn 找不到 backend 包（ModuleNotFoundError: No module named 'backend'）。
+  # 开机自启/桌面 kiosk 环境的 cwd 是 $HOME，而非项目根，故用子 shell cd 到 $ROOT。
+  (
+    cd "$ROOT"
+    nohup "$PY" -m uvicorn backend.main:app --host 0.0.0.0 --port "${API_PORT}" \
+      >> "$ROOT/logs/api.log" 2>&1 &
+  )
+}
+
+start_web() {
+  log "清理旧 Vite 进程 ..."
+  pkill -9 -f "vite.*${WEB_PORT}" 2>/dev/null || true
+  pkill -9 -f "node.*vite" 2>/dev/null || true
+  sleep 1
+  if pgrep -f "vite.*${WEB_PORT}" >/dev/null 2>&1; then
+    log "Web 已在运行"
+    return
+  fi
+  log "启动前端 Vite (0.0.0.0:${WEB_PORT}) ..."
+  (
+    cd "$ROOT"
+    nohup npm run dev -- --host 0.0.0.0 --port "${WEB_PORT}" --strictPort \
+      >> "$ROOT/logs/web.log" 2>&1 &
+  )
+}
+
+mkdir -p "$ROOT/logs"
+rotate_logs
+start_api
+start_web
+
+log "完成。打开 http://127.0.0.1:${WEB_PORT}/dashboard"
+log "日志: $ROOT/logs/{api,web}.log"
+
+if [[ "$OPEN_BROWSER" == "1" ]]; then
+  sleep 2
+  KIOSK="${KIOSK:-1}" WEB_PORT="$WEB_PORT" bash "$ROOT/scripts/open-dashboard.sh"
+fi

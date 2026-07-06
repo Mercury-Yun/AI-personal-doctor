@@ -1,0 +1,1137 @@
+% ============================================================
+%  技术文档 · 第一部分  作品概述
+%  项目名称：基于 RK3588 的边缘 AI 私人医生智能终端
+% ============================================================
+
+\documentclass[12pt, a4paper]{ctexart}
+
+% ── 宏包 ──────────────────────────────────────────────────
+\usepackage{geometry}
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{
+    shapes.geometric, arrows.meta, positioning, fit,
+    backgrounds, calc, decorations.markings, shadows,
+    decorations.pathreplacing
+}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue!60!black, citecolor=blue!60!black}
+
+% ── 自定义颜色 ────────────────────────────────────────────
+\definecolor{coreblue}{HTML}{2B6CB0}
+\definecolor{edgegreen}{HTML}{38A169}
+\definecolor{sensororange}{HTML}{DD6B20}
+\definecolor{cloudpurple}{HTML}{805AD5}
+\definecolor{alertred}{HTML}{E53E3E}
+\definecolor{blockbg}{HTML}{EBF8FF}
+\definecolor{npugold}{HTML}{D69E2E}
+\definecolor{mobileteal}{HTML}{319795}
+
+\begin{document}
+
+% ══════════════════════════════════════════════════════════
+\section*{基于 RK3588 的边缘 AI 私人医生智能终端}
+% ══════════════════════════════════════════════════════════
+
+% ──────────────────────────────────────────────────────────
+% 摘要（800字内）
+% ──────────────────────────────────────────────────────────
+\subsection*{摘要}
+
+本作品面向居家老年慢病患者的日常健康管理需求，以瑞芯微 RK3588 开发板为主控平台，充分利用其 8 核 CPU 与 6\,TOPS NPU 算力，构建了集语音唤醒、离线语音识别、大语言模型边缘问诊、AI 数字人交互、多模态视觉药物识别、智能用药提醒、多传感器健康数据融合与可视化、手机家属远程监护于一体的边缘 AI 私人医生智能终端。
+
+系统采用"边缘为主、云端增强"架构。语音问诊核心链路全部在本地完成：Sherpa-ONNX 部署 Zipformer INT8 量化模型实现唤醒（延迟 560\,ms、误唤醒率 0\%），SenseVoice 离线 ASR 达 25 倍实时识别速度（RTF\,0.04），RKLLM 框架于 NPU 部署 Qwen2 大语言模型实现本地问诊推理，Piper 本地 TTS 完成语音合成（RTF\,0.423），FAISS + BGE-small-zh 构建本地 RAG 医疗知识库（126 文档块，Top3 命中率 90\%）。仅拍照识药场景调用云端 Qwen-VL-Max 多模态视觉模型进行高精度药品图像识别。
+
+系统融合 ALSA 双通道麦克风、USB 摄像头（1280$\times$720）、佳明智能手表（心率/步数/睡眠/血氧等 10+ 项体征）三类传感器，实现从数据采集到健康分析、异常预警、用药管理的完整闭环。交互层面创新设计四态 AI 数字人形象（待机/倾听/思考/回答），配合状态驱动动画引擎，营造面对面问诊般的沉浸式体验。同时实现大屏老人端 + 手机家属端双端协同架构，家属通过手机浏览器即可远程监护老人健康，无需安装 APP。
+
+系统已在 RK3588 上完成部署与全链路测试，CPU 峰值占用 70.8\%，内存峰值 6.0\,GB，温度控制在 84°C 以内，具备良好的边缘实时运行能力，为老年人居家健康管理提供了可落地的智能终端解决方案。
+
+\newpage
+
+% ══════════════════════════════════════════════════════════
+\section{第一部分\quad 作品概述}
+% ══════════════════════════════════════════════════════════
+
+% ──────────────────────────────────────────────────────────
+% 1.1 功能与特性（400字内 + 图）
+% ──────────────────────────────────────────────────────────
+\subsection{功能与特性}
+
+本系统以 RK3588 为主控单元，利用其 NPU 边缘推理能力，构建面向老年慢病患者的七大核心功能：
+
+\textbf{（1）语音唤醒与 AI 数字人问诊。}呼唤"小医"即刻唤醒，本地 ASR 转文本后由 NPU 上的 Qwen2 LLM 结合 RAG 知识库生成个性化医疗建议。四态 AI 数字人（待机/倾听/思考/回答）实时呈现拟人化交互状态。
+
+\textbf{（2）拍照识药与用药核验。}摄像头拍药盒，云端 VLM 识别药品并与当日待服药物自动比对，语音播报确认或警告，防止误服。
+
+\textbf{（3）RAG 医疗知识库。}本地 FAISS 向量索引覆盖 40 种药物、5 种慢病、4 种急救场景共 126 文档块，检索耗时 68\,ms，命中率 90\%。
+
+\textbf{（4）三重用药安全保障。}定时语音提醒 → 服药确认/拍照核验 → 逾期推送家属微信，构建完整闭环。
+
+\textbf{（5）多源健康数据融合。}对接佳明手表同步 10+ 项体征，ECharts 绘制 7 日趋势图，四维加权评分算法生成健康画像，异常自动告警。
+
+\textbf{（6）手机家属远程监护端。}768px 响应式自适应，家属浏览器直接访问，远程查看健康数据、管理用药、查阅病例。每晚推送健康日报。
+
+\textbf{（7）SOS 紧急求助。}双击确认防误触，即刻推送家属微信，内置急救知识库提供语音自救指导。
+
+% ── 系统功能架构图 ────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 0.6cm,
+    every node/.style={font=\footnotesize},
+    block/.style={draw, rounded corners=3pt, minimum height=0.85cm,
+                  minimum width=2.2cm, align=center, thick},
+    core/.style={block, fill=coreblue!15, draw=coreblue},
+    edge/.style={block, fill=edgegreen!15, draw=edgegreen},
+    sensor/.style={block, fill=sensororange!15, draw=sensororange},
+    npu/.style={block, fill=npugold!15, draw=npugold},
+    cloud/.style={block, fill=cloudpurple!12, draw=cloudpurple},
+    mobile/.style={block, fill=mobileteal!15, draw=mobileteal},
+    alert/.style={block, fill=alertred!10, draw=alertred},
+    arr/.style={-{Stealth[length=4pt]}, thick, draw=gray!65},
+]
+
+% 传感器层
+\node[sensor] (mic) {麦克风\\ALSA 双通道};
+\node[sensor, right=of mic] (cam) {USB 摄像头\\OpenCV};
+\node[sensor, right=of cam] (watch) {佳明手表\\10+ 项体征};
+
+% 边缘推理层
+\node[edge, below=0.9cm of mic] (kws) {KWS 唤醒\\Zipformer INT8};
+\node[edge, right=of kws] (asr) {ASR 识别\\SenseVoice};
+\node[edge, right=of asr] (rag) {RAG 检索\\FAISS+BGE};
+
+% NPU/云端层
+\node[npu, below=0.9cm of kws] (llm) {Qwen2 LLM\\NPU 本地推理};
+\node[cloud, right=of llm] (vlm) {Qwen-VL-Max\\云端视觉识别};
+\node[npu, right=of vlm] (tts) {Piper TTS\\本地合成};
+
+% 核心服务层
+\node[core, below=0.9cm of llm] (intent) {意图路由\\Prompt Builder};
+\node[core, right=of intent] (med) {用药管理\\三重提醒};
+\node[core, right=of med] (health) {健康融合\\异常检测};
+
+% 输出层
+\node[alert, below=0.9cm of intent] (avatar) {AI 数字人\\四态动画};
+\node[alert, right=of avatar] (gui) {健康仪表盘\\Vue3+ECharts};
+\node[mobile, right=of gui] (phone) {手机家属端\\远程监护};
+
+% 连线
+\draw[arr] (mic) -- (kws);
+\draw[arr] (mic.south) -- ++(0,-0.25) -| (asr);
+\draw[arr] (cam) -- (vlm);
+\draw[arr] (watch) -- (health);
+\draw[arr] (kws) -- (llm);
+\draw[arr] (asr) -- (llm);
+\draw[arr] (rag) -- (llm);
+\draw[arr] (llm) -- (intent);
+\draw[arr] (vlm) -- (intent);
+\draw[arr] (llm) -- (tts);
+\draw[arr] (intent) -- (avatar);
+\draw[arr] (med) -- (gui);
+\draw[arr] (health) -- (gui);
+\draw[arr] (health) -- (phone);
+
+% 层标签
+\node[left=0.2cm of mic, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=sensororange] {传感器};
+\node[left=0.2cm of kws, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=edgegreen] {边缘推理};
+\node[left=0.2cm of llm, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=npugold] {NPU/云端};
+\node[left=0.2cm of intent, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=coreblue] {核心服务};
+\node[left=0.2cm of avatar, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=alertred] {交互输出};
+
+% 本地/云端标注
+\begin{scope}[on background layer]
+    \node[draw=edgegreen!40, dashed, rounded corners=5pt, inner sep=5pt,
+          fit=(kws)(asr)(rag)(llm)(tts),
+          label={[font=\tiny\bfseries, color=edgegreen!70]below left:%
+          RK3588 本地}] {};
+    \node[draw=cloudpurple!40, dashed, rounded corners=3pt, inner sep=3pt,
+          fit=(vlm),
+          label={[font=\tiny\bfseries, color=cloudpurple!70]below:云端}] {};
+\end{scope}
+\end{tikzpicture}
+\caption{系统五层功能架构（边缘为主 + 云端视觉增强）}
+\label{fig:func-arch}
+\end{figure}
+
+
+% ──────────────────────────────────────────────────────────
+% 1.2 应用领域（400字内 + 图）
+% ──────────────────────────────────────────────────────────
+\subsection{应用领域}
+
+本系统面向居家老年慢病患者的日常健康管理领域，解决独居老人就医不便、用药遗忘、健康监测缺失等痛点。
+
+\textbf{（1）居家智慧养老。}我国超 1.9 亿老年人患有慢性病，基层医疗资源紧张。系统作为"床头 AI 家庭医生"，老人语音呼唤即可获得个性化健康咨询，屏幕上 AI 数字人提供陪伴感，零门槛交互无需学习操作。
+
+\textbf{（2）用药安全管理。}老年人用药差错率高达 12\%--20\%。系统通过"语音提醒 → 拍照识药核验 → 逾期推送家属"三重保障，构建提醒-确认-监督的完整闭环，有效降低用药差错风险。
+
+\textbf{（3）远程健康监护。}大屏老人端 + 手机家属端双端协同：老人端 Kiosk 全屏负责本地交互；家属端手机浏览器免安装远程访问，查看健康评分、7 日趋势、管理用药。每晚健康日报自动推送，异常告警与 SOS 实时送达微信。
+
+\textbf{（4）边缘 AI 医疗终端示范。}语音问诊核心链路全部边缘侧完成，仅视觉识药按需上云，极低网络依赖。可推广至社区卫生服务站、乡村卫生室、养老院等医疗资源薄弱场景。
+
+% ── 应用场景与双端协同示意图 ──────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1.0cm and 1.3cm,
+    every node/.style={font=\footnotesize},
+    scene/.style={draw, rounded corners=5pt, minimum height=1.5cm,
+                  minimum width=2.8cm, align=center, thick, fill=blockbg,
+                  drop shadow={shadow xshift=1pt, shadow yshift=-1pt}},
+    devbox/.style={draw, rounded corners=7pt, minimum height=2.0cm,
+                   minimum width=3.4cm, align=center, very thick,
+                   fill=coreblue!12, draw=coreblue,
+                   drop shadow={shadow xshift=1.5pt, shadow yshift=-1.5pt}},
+    user/.style={draw, rounded corners=3pt, minimum height=1.2cm,
+                 minimum width=1.8cm, align=center, thick},
+    arr/.style={-{Stealth[length=4pt]}, thick, draw=coreblue},
+    darr/.style={Stealth[length=4pt]-Stealth[length=4pt], thick, draw=coreblue},
+]
+\node[devbox] (dev) {\textbf{RK3588}\\AI 私人医生};
+\node[user, left=1.8cm of dev, fill=edgegreen!10, draw=edgegreen]
+    (elder) {\textbf{老人端}\\大屏 Kiosk};
+\node[user, right=1.8cm of dev, fill=mobileteal!10, draw=mobileteal]
+    (family) {\textbf{家属端}\\手机浏览器};
+\node[scene, above left=1.0cm and 1.5cm of dev]
+    (s1) {\textbf{AI 语音问诊}\\数字人交互};
+\node[scene, above right=1.0cm and 1.5cm of dev]
+    (s2) {\textbf{远程监护}\\日报/告警};
+\node[scene, below left=1.0cm and 1.5cm of dev]
+    (s3) {\textbf{用药安全}\\三重保障};
+\node[scene, below right=1.0cm and 1.5cm of dev]
+    (s4) {\textbf{紧急救助}\\SOS 求助};
+\draw[darr] (elder) -- node[above, font=\tiny]{语音交互} (dev);
+\draw[darr] (dev) -- node[above, font=\tiny]{远程访问} (family);
+\draw[arr, dashed, draw=gray!50] (dev) -- (s1);
+\draw[arr, dashed, draw=gray!50] (dev) -- (s2);
+\draw[arr, dashed, draw=gray!50] (dev) -- (s3);
+\draw[arr, dashed, draw=gray!50] (dev) -- (s4);
+\draw[arr, draw=alertred, dashed] (dev.east) ++(0,-0.3) -- ++(0.4,0)
+    |- node[right, font=\tiny, color=alertred, pos=0.25]{微信推送} (family.south);
+\end{tikzpicture}
+\caption{应用场景与大屏老人端—手机家属端双端协同}
+\label{fig:app-scene}
+\end{figure}
+
+
+% ──────────────────────────────────────────────────────────
+% 1.3 主要技术特点（400字内）
+% ──────────────────────────────────────────────────────────
+\subsection{主要技术特点}
+
+\textbf{（1）边缘为主的多模态 AI 推理。}语音问诊核心链路（KWS → ASR → RAG → LLM → TTS）全部在 RK3588 本地完成：KWS 采用 Zipformer INT8 量化 + RMS 能量门控实现低误报唤醒；ASR 基于 SenseVoice 多语言模型支持五语种离线识别；LLM 通过 RKLLM 框架部署 Qwen2 于 NPU 实现本地推理；TTS 采用 Piper 本地合成。仅拍照识药调用云端 Qwen-VL-Max 进行高精度视觉识别，实现"核心离线、视觉增强"的最优边-云协同。
+
+\textbf{（2）多传感器融合与闭环决策。}集成 ALSA 双通道麦克风（自动右声道优选）、USB 摄像头（1280$\times$720）、佳明手表（10+ 项体征）三类传感器，健康异常检测引擎持续监控心率与血氧，触发微信推送形成"采集→融合→分析→预警→通知"闭环。
+
+\textbf{（3）四态 AI 数字人交互。}待机（呼吸浮动）、倾听（前倾放大）、思考（摇晃微转）、回答（脉冲缩放）四态状态机驱动，配合四色编码指示与 0.6s 淡入淡出过渡，全程语音驱动支持多轮连续对话，营造面对面问诊体验。
+
+\textbf{（4）大屏-手机双端协同。}老人端 Kiosk 全屏 + 语音驱动聚焦本地交互；家属端 768px 响应式免安装聚焦远程监护。路由守卫自动隐藏硬件依赖功能，双端体验一致。
+
+
+% ──────────────────────────────────────────────────────────
+% 1.4 主要性能指标（200字内，表格）
+% ──────────────────────────────────────────────────────────
+\subsection{主要性能指标}
+
+表~\ref{tab:perf} 为系统在 RK3588 平台上的实测数据。
+
+\begin{table}[H]
+\centering
+\caption{主要性能指标（RK3588 实测）}
+\label{tab:perf}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{维度} & \textbf{指标} & \textbf{实测值} \\
+\midrule
+\multirow{4}{*}{\shortstack[l]{边缘AI}}
+  & KWS 唤醒延迟 & 560\,ms，误唤醒率 0\% \\
+  & ASR 识别 RTF & 0.04（25$\times$实时），CER 7.69\% \\
+  & LLM 本地推理 & TTFT 11.5\,s，生成 429.6 字符/秒 \\
+  & RAG 检索 & 68\,ms，Top3 命中率 90\% \\
+\midrule
+\multirow{3}{*}{\shortstack[l]{传感器}}
+  & 摄像头 & 1280$\times$720，双引擎容错 \\
+  & 麦克风 & 16\,kHz/16bit 双通道 \\
+  & 手表 & 10+ 项体征，10 分钟同步 \\
+\midrule
+\multirow{2}{*}{\shortstack[l]{显示}}
+  & 数字人切换 & 0.6\,s 四态过渡 \\
+  & GUI 帧率 & 60\,fps Kiosk 全屏 \\
+\midrule
+\multirow{2}{*}{\shortstack[l]{资源}}
+  & CPU/内存 & 峰值 70.8\% / 6.0\,GB \\
+  & 温度 & 峰值 84.1°C \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+% ──────────────────────────────────────────────────────────
+% 1.5 主要创新点（200字内，逐点）
+% ──────────────────────────────────────────────────────────
+\subsection{主要创新点}
+
+\begin{enumerate}[leftmargin=2em, itemsep=2pt, label=\textbf{(\arabic*)}]
+
+\item \textbf{四态 AI 数字人交互引擎。}首创面向老年人的四态数字人（待机/倾听/思考/回答），状态驱动动画 + 四色指示，将语音助手升级为有"表情体态"的虚拟医生，提升老年用户信任感。
+
+\item \textbf{患者画像感知 Prompt 工程。}意图路由 → 指代消解 → 8 维上下文分级注入 → 口语化风格控制的四阶流水线，实现千人千面的个性化问诊。
+
+\item \textbf{拍照识药 + 用药核验融合。}VLM 识别结果与待服药物自动交叉比对，从"看到药盒"到"确认可服"一步完成，填补"只提醒不核验"的空白。
+
+\item \textbf{大屏老人端 + 手机家属端双端协同。}差异化功能定位 + 微信日报/告警，构建"老人有 AI 医生，家属有健康管家"的智慧养老生态。
+
+\end{enumerate}
+
+% ── AI 数字人四态状态机图 ─────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm,
+    every node/.style={font=\footnotesize},
+    state/.style={draw, rounded corners=6pt, minimum height=2.2cm,
+                  minimum width=2.4cm, align=center, thick,
+                  drop shadow={shadow xshift=0.5pt, shadow yshift=-0.5pt}},
+    arr/.style={-{Stealth[length=4pt]}, thick},
+]
+\node[state, fill=edgegreen!10, draw=edgegreen] (idle) {
+    \textbf{待机态}\\[1pt]
+    {\scriptsize 呼吸浮动}\\
+    {\color{edgegreen}\rule{5pt}{5pt}} {\tiny 绿}
+};
+\node[state, fill=coreblue!10, draw=coreblue, right=of idle] (listen) {
+    \textbf{倾听态}\\[1pt]
+    {\scriptsize 前倾放大}\\
+    {\color{coreblue}\rule{5pt}{5pt}} {\tiny 蓝}
+};
+\node[state, fill=npugold!10, draw=npugold, right=of listen] (think) {
+    \textbf{思考态}\\[1pt]
+    {\scriptsize 摇晃微转}\\
+    {\color{npugold}\rule{5pt}{5pt}} {\tiny 黄}
+};
+\node[state, fill=cloudpurple!10, draw=cloudpurple, right=of think] (speak) {
+    \textbf{回答态}\\[1pt]
+    {\scriptsize 脉冲缩放}\\
+    {\color{cloudpurple}\rule{5pt}{5pt}} {\tiny 紫}
+};
+\draw[arr, draw=edgegreen!70] (idle) -- node[above, font=\tiny]{"小医"} (listen);
+\draw[arr, draw=coreblue!70] (listen) -- node[above, font=\tiny]{识别完成} (think);
+\draw[arr, draw=npugold!70] (think) -- node[above, font=\tiny]{生成回答} (speak);
+\draw[arr, draw=cloudpurple!70, bend left=20] (speak.south) to
+    node[below, font=\tiny]{播报结束} (idle.south);
+\end{tikzpicture}
+\caption{AI 数字人四态交互状态机}
+\label{fig:avatar-states}
+\end{figure}
+
+
+% ──────────────────────────────────────────────────────────
+% 1.6 设计流程（200字内 + 图）
+% ──────────────────────────────────────────────────────────
+\subsection{设计流程}
+
+系统遵循敏捷迭代流程（图~\ref{fig:design-flow}）：需求调研阶段分析老年慢病患者痛点，确定六大功能模块；架构设计阶段规划"边缘为主"的 AI 部署策略与 CPU/NPU 资源分配；模块开发阶段基于 FastAPI 微服务架构实现 26 个独立服务；系统集成阶段完成前后端联调、多传感器对接与唤醒-问诊-播报全链路打通；板端部署后通过自研 9 模块 benchmark 测试套件全面验证性能，持续迭代优化。
+
+% ── 设计流程图 ────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.3cm,
+    every node/.style={font=\footnotesize},
+    phase/.style={draw, rounded corners=4pt, minimum height=1.0cm,
+                  minimum width=2.0cm, align=center, thick,
+                  fill=coreblue!12, draw=coreblue!60},
+    arr/.style={-{Stealth[length=4pt]}, thick, draw=coreblue!60},
+]
+\node[phase] (p1) {需求调研\\用户画像};
+\node[phase, right=of p1] (p2) {架构设计\\资源规划};
+\node[phase, right=of p2] (p3) {模块开发\\26 服务};
+\node[phase, right=of p3] (p4) {系统集成\\全链路联调};
+\node[phase, right=of p4] (p5) {板端部署\\Benchmark};
+\node[phase, right=of p5] (p6) {迭代优化\\持续调优};
+\draw[arr] (p1)--(p2); \draw[arr] (p2)--(p3);
+\draw[arr] (p3)--(p4); \draw[arr] (p4)--(p5);
+\draw[arr] (p5)--(p6);
+\draw[arr, dashed, draw=alertred!60, bend left=24]
+    (p6.south) to node[below, font=\tiny, color=alertred!80]{敏捷迭代} (p3.south);
+\end{tikzpicture}
+\caption{系统敏捷迭代设计流程}
+\label{fig:design-flow}
+\end{figure}
+
+% ── 全链路数据流图 ────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.18cm and 0.08cm,
+    every node/.style={font=\scriptsize},
+    step/.style={draw, rounded corners=2pt, minimum height=0.75cm,
+                 minimum width=1.5cm, align=center, thick},
+    local/.style={step, fill=edgegreen!15, draw=edgegreen},
+    npus/.style={step, fill=npugold!12, draw=npugold},
+    outs/.style={step, fill=alertred!10, draw=alertred},
+    arr/.style={-{Stealth[length=3pt]}, thick, draw=gray!65},
+    time/.style={font=\tiny, color=gray!80},
+]
+\node[local] (w1) {KWS\\唤醒};
+\node[local, right=of w1] (w2) {录音\\6s};
+\node[local, right=of w2] (w3) {ASR\\SenseVoice};
+\node[local, right=of w3] (w4) {意图路由\\指代消解};
+\node[local, right=of w4] (w5) {RAG\\FAISS};
+\node[npus, right=of w5] (w6) {Qwen2\\NPU};
+\node[local, right=of w6] (w7) {Piper\\TTS};
+\node[outs, right=of w7] (w8) {数字人\\播报};
+\draw[arr] (w1)--(w2); \draw[arr] (w2)--(w3);
+\draw[arr] (w3)--(w4); \draw[arr] (w4)--(w5);
+\draw[arr] (w5)--(w6); \draw[arr] (w6)--(w7);
+\draw[arr] (w7)--(w8);
+\node[time, below=0.1cm of w1] {560ms};
+\node[time, below=0.1cm of w3] {242ms};
+\node[time, below=0.1cm of w5] {68ms};
+\node[time, below=0.1cm of w6] {12.5s};
+\node[time, below=0.1cm of w7] {1.1s};
+\draw[decorate, decoration={brace, amplitude=4pt, mirror}, thick, edgegreen!60]
+    (w1.south west) ++(0,-0.42) --
+    node[below=3pt, font=\tiny, color=edgegreen]%
+    {\textbf{语音问诊核心链路——全部 RK3588 本地完成}}
+    ($(w8.south east)+(0,-0.42)$);
+\end{tikzpicture}
+\caption{语音问诊全链路数据流与实测耗时}
+\label{fig:pipeline}
+\end{figure}
+
+
+% ══════════════════════════════════════════════════════════
+%  第二部分  系统组成及功能说明
+% ══════════════════════════════════════════════════════════
+\section{第二部分\quad 系统组成及功能说明}
+
+% ──────────────────────────────────────────────────────────
+% 2.1 整体介绍（系统整体框图，各子模块标注清楚）
+% ──────────────────────────────────────────────────────────
+\subsection{整体介绍}
+
+本系统采用\textbf{"边缘为主、云端增强"}的端云协同架构，以 RK3588 开发板为主控平台，
+构建五层功能体系（图~\ref{fig:overall-arch}）。各层之间通过标准化接口通信，
+形成从传感器采集到 AI 推理再到交互输出的完整数据流闭环。
+
+\begin{enumerate}[leftmargin=2em, itemsep=2pt]
+  \item \textbf{传感器感知层}：负责原始数据采集，包括 ALSA 双通道麦克风（语音输入）、
+    USB 摄像头（视觉输入）、佳明智能手表（体征数据），为系统提供多模态感知能力。
+
+  \item \textbf{边缘推理层}：运行于 RK3588 CPU，部署轻量级 AI 模型，包括
+    Sherpa-ONNX KWS（关键词唤醒）、SenseVoice ASR（离线语音识别）、
+    FAISS + BGE Embedding（本地知识检索），实现毫秒级实时感知。
+
+  \item \textbf{NPU/云端层}：负责高性能推理。RK3588 NPU 通过 RKLLM 框架部署
+    Qwen2 大语言模型完成本地问诊；云端仅在拍照识药场景按需调用 Qwen-VL-Max
+    多模态视觉模型进行高精度药品识别。
+
+  \item \textbf{核心服务层}：基于 FastAPI 的微服务架构，包含意图路由引擎、
+    Prompt Builder、用药管理、健康融合与异常检测、微信通知等 26 个独立服务，
+    实现业务逻辑编排与数据处理。
+
+  \item \textbf{交互输出层}：包含四态 AI 数字人、Vue3 健康仪表盘、手机家属端，
+    通过语音、视觉、远程推送等方式完成与用户的交互。
+\end{enumerate}
+
+% ── 系统整体架构框图 ──────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm and 0.5cm,
+    every node/.style={font=\footnotesize},
+    block/.style={draw, rounded corners=4pt, minimum height=0.9cm,
+                  minimum width=2.8cm, align=center, thick},
+    sensor/.style={block, fill=sensororange!15, draw=sensororange},
+    edge/.style={block, fill=edgegreen!15, draw=edgegreen},
+    npu/.style={block, fill=npugold!15, draw=npugold},
+    cloud/.style={block, fill=cloudpurple!12, draw=cloudpurple},
+    core/.style={block, fill=coreblue!15, draw=coreblue},
+    out/.style={block, fill=alertred!10, draw=alertred},
+    arr/.style={-{Stealth[length=4pt]}, thick, draw=gray!60},
+    darr/.style={Stealth[length=4pt]-Stealth[length=4pt], thick, draw=gray!60},
+]
+
+% 传感器层
+\node[sensor] (mic) {ALSA 麦克风\\双通道 16kHz};
+\node[sensor, right=of mic] (cam) {USB 摄像头\\1280×720};
+\node[sensor, right=of cam] (watch) {佳明手表\\蓝牙 BLE};
+
+% 边缘推理层
+\node[edge, below=0.8cm of mic] (kws) {KWS 唤醒\\Zipformer INT8};
+\node[edge, right=of kws] (asr) {ASR 识别\\SenseVoice};
+\node[edge, right=of asr] (rag) {RAG 检索\\FAISS+BGE};
+
+% NPU/云端层
+\node[npu, below=0.8cm of kws] (llm) {\textbf{Qwen2}\\RKLLM NPU};
+\node[cloud, right=of llm] (vlm) {\textbf{Qwen-VL-Max}\\云端 VLM};
+\node[npu, right=of vlm] (tts) {\textbf{Piper}\\本地 TTS};
+
+% 核心服务层
+\node[core, below=0.8cm of llm] (intent) {意图路由\\Prompt Builder};
+\node[core, right=of intent] (med) {用药管理\\三重提醒};
+\node[core, right=of med] (health) {健康融合\\异常检测};
+
+% 交互输出层
+\node[out, below=0.8cm of intent] (avatar) {AI 数字人\\四态动画};
+\node[out, right=of avatar] (gui) {健康仪表盘\\Vue3+ECharts};
+\node[out, right=of gui] (phone) {手机家属端\\微信推送};
+
+% 传感器→边缘推理连线
+\draw[arr] (mic) -- (kws);
+\draw[arr] (mic.south) -- ++(0,-0.2) -| (asr);
+\draw[arr] (cam) -- (vlm);
+\draw[arr] (watch) -- (health);
+
+% 边缘推理→NPU/云端连线
+\draw[arr] (kws) -- (llm);
+\draw[arr] (asr) -- (llm);
+\draw[arr] (rag) -- (llm);
+
+% NPU/云端→核心服务连线
+\draw[arr] (llm) -- (intent);
+\draw[arr] (vlm) -- (intent);
+\draw[arr] (llm) -- (tts);
+
+% 核心服务→交互输出连线
+\draw[arr] (intent) -- (avatar);
+\draw[arr] (med) -- (gui);
+\draw[arr] (health) -- (gui);
+\draw[arr] (health) -- (phone);
+\draw[arr] (tts) -- (avatar);
+
+% 层标签
+\node[left=0.2cm of mic, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=sensororange] {传感器层};
+\node[left=0.2cm of kws, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=edgegreen] {边缘推理层};
+\node[left=0.2cm of llm, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=npugold] {NPU/云端层};
+\node[left=0.2cm of intent, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=coreblue] {核心服务层};
+\node[left=0.2cm of avatar, rotate=90, anchor=south,
+      font=\scriptsize\bfseries, color=alertred] {交互输出层};
+
+% 本地/云端标注框
+\begin{scope}[on background layer]
+    \node[draw=edgegreen!30, dashed, rounded corners=6pt, inner sep=6pt,
+          fit=(kws)(asr)(rag)(llm)(tts),
+          label={[font=\tiny\bfseries, color=edgegreen!70]below left:RK3588 本地}] {};
+    \node[draw=cloudpurple!30, dashed, rounded corners=4pt, inner sep=4pt,
+          fit=(vlm),
+          label={[font=\tiny\bfseries, color=cloudpurple!70]below:云端增强}] {};
+\end{scope}
+
+% 数据流向标注
+\draw[darr, draw=coreblue!40] (intent) -- node[above, font=\tiny]{患者画像} (med);
+\draw[darr, draw=coreblue!40] (med) -- node[above, font=\tiny]{用药记录} (intent);
+\draw[darr, draw=coreblue!40] (health) -- node[above, font=\tiny]{健康数据} (intent);
+
+\end{tikzpicture}
+\caption{系统五层架构整体框图（边缘为主 + 云端视觉增强）}
+\label{fig:overall-arch}
+\end{figure}
+
+\newpage
+
+% ──────────────────────────────────────────────────────────
+% 2.2 硬件系统介绍
+% ──────────────────────────────────────────────────────────
+\subsection{硬件系统介绍}
+
+% ──────────────────────────────────────────────────────────
+% 2.2.1 硬件整体介绍
+% ──────────────────────────────────────────────────────────
+\subsubsection{硬件整体介绍}
+
+系统硬件平台基于\textbf{瑞芯微 RK3588} 开发板构建，该芯片集成 8 核 CPU（4×Cortex-A76 + 4×Cortex-A55）、
+6\,TOPS NPU 神经网络处理器、GPU 图形加速引擎，支持 4K 解码与多种接口扩展。
+系统通过 RK3588 丰富的外设接口实现多传感器融合，具体硬件组成如表~\ref{tab:hardware} 所示。
+
+\begin{table}[H]
+\centering
+\caption{系统硬件组成清单}
+\label{tab:hardware}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+\textbf{类别} & \textbf{设备} & \textbf{接口} & \textbf{用途} \\
+\midrule
+主控单元 & RK3588 开发板 & — & 8核CPU/6TOPS NPU/GPU/16GB RAM \\
+麦克风 & USB 麦克风 & ALSA plughw:1,0 & 语音唤醒与语音识别输入 \\
+摄像头 & USB 摄像头 & /dev/video11 & 拍照识药与视频流预览 \\
+扬声器 & 板载音频输出 & ALSA plughw:1,0 & TTS 语音播报 \\
+显示屏 & HDMI 显示器 & HDMI 2.0 & Kiosk 全屏健康看板 \\
+智能手表 & Garmin Fenix 系列 & 蓝牙 BLE + Garmin Connect API & 心率/血氧/步数/睡眠采集 \\
+网络 & 有线/无线 & Ethernet/Wi-Fi & 云端通信与远程访问 \\
+存储 & eMMC + SD 卡 & — & 系统与数据持久化 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ── RK3588 外设连接拓扑图 ─────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm and 1.2cm,
+    every node/.style={font=\footnotesize},
+    board/.style={draw, rectangle, rounded corners=10pt, minimum width=7cm,
+                  minimum height=4.5cm, fill=coreblue!12, draw=coreblue, very thick,
+                  align=center, drop shadow={shadow xshift=2pt, shadow yshift=-2pt}},
+    periph/.style={draw, rounded corners=4pt, minimum height=1.0cm,
+                   minimum width=2.0cm, align=center, thick},
+    usb/.style={periph, fill=sensororange!12, draw=sensororange},
+    audio/.style={periph, fill=edgegreen!12, draw=edgegreen},
+    video/.style={periph, fill=cloudpurple!12, draw=cloudpurple},
+    watch/.style={periph, fill=npugold!12, draw=npugold},
+    arr/.style={-{Stealth[length=4pt]}, thick},
+    cable/.style={rounded corners=2pt, thick},
+]
+
+% 主板
+\node[board] (rk) {
+    \textbf{RK3588 主控板}\\[4pt]
+    {\tiny 8 核 CPU · 6 TOPS NPU · 16 GB RAM}\\[6pt]
+    \begin{tikzpicture}[scale=0.9]
+    \filldraw[fill=npugold!20, draw=npugold, rounded corners=3pt] (0,0) rectangle (2.2,0.8);
+    \node at (1.1,0.4) {\tiny\textbf{NPU}};
+    \filldraw[fill=coreblue!20, draw=coreblue, rounded corners=3pt] (2.4,0) rectangle (4.2,0.8);
+    \node at (3.3,0.4) {\tiny\textbf{CPU}};
+    \filldraw[fill=sensororange!20, draw=sensororange, rounded corners=3pt] (0,-1) rectangle (2.2,0.8);
+    \node at (1.1,-0.6) {\tiny\textbf{USB Hub}};
+    \filldraw[fill=cloudpurple!20, draw=cloudpurple, rounded corners=3pt] (2.4,-1) rectangle (4.2,0.8);
+    \node at (3.3,-0.6) {\tiny\textbf{HDMI}};
+    \filldraw[fill=edgegreen!20, draw=edgegreen, rounded corners=3pt] (0,-2) rectangle (2.2,0.8);
+    \node at (1.1,-1.6) {\tiny\textbf{Audio Codec}};
+    \filldraw[fill=alertred!20, draw=alertred, rounded corners=3pt] (2.4,-2) rectangle (4.2,0.8);
+    \node at (3.3,-1.6) {\tiny\textbf{Wi-Fi/BLE}};
+    \end{tikzpicture}
+};
+
+% 外设
+\node[usb, above left=of rk] (mic) {\textbf{USB 麦克风}\\16kHz 双通道};
+\node[usb, above right=of rk] (cam) {\textbf{USB 摄像头}\\1280×720};
+\node[video, below left=of rk] (screen) {\textbf{HDMI 显示器}\\Kiosk 全屏};
+\node[audio, below right=of rk] (speaker) {\textbf{扬声器}\\板载音频};
+\node[watch, right=1.5cm of cam] (garmin) {\textbf{Garmin 手表}\\心率/血氧/步数};
+
+% 连线
+\draw[arr, draw=sensororange] (mic) -- node[right, font=\tiny]{USB 3.0} (rk.north west);
+\draw[arr, draw=sensororange] (cam) -- node[left, font=\tiny]{USB 2.0} (rk.north east);
+\draw[arr, draw=cloudpurple] (rk.south west) -- node[right, font=\tiny]{HDMI 2.0} (screen);
+\draw[arr, draw=edgegreen] (rk.south east) -- node[left, font=\tiny]{I2S} (speaker);
+\draw[arr, draw=npugold, dashed, bend right=15] (rk.east) -- node[below, font=\tiny]{BLE + API} (garmin);
+
+% 接口标注
+\node[font=\tiny, color=sensororange, above=0.3cm of rk.north west] {\textbf{USB-A}};
+\node[font=\tiny, color=sensororange, above=0.3cm of rk.north east] {\textbf{USB-A}};
+\node[font=\tiny, color=cloudpurple, below=0.3cm of rk.south west] {\textbf{HDMI}};
+\node[font=\tiny, color=edgegreen, below=0.3cm of rk.south east] {\textbf{3.5mm}};
+\node[font=\tiny, color=npugold, right=0.3cm of rk.east] {\textbf{BLE/Wi-Fi}};
+
+\end{tikzpicture}
+\caption{RK3588 外设连接拓扑图（标注接口类型与关键信号线）}
+\label{fig:hardware-topo}
+\end{figure}
+
+% ──────────────────────────────────────────────────────────
+% 2.2.2 机械设计介绍（如无则简述）
+% ──────────────────────────────────────────────────────────
+\subsubsection{机械设计介绍}
+
+系统采用\textbf{桌面式一体化设计}方案。RK3588 开发板安装于定制亚克力外壳中，
+正面配备 15.6 英寸 HDMI 触控显示器，顶部集成 USB 麦克风阵列与摄像头，
+底部预留扬声器输出接口。整体尺寸约 360\,mm × 240\,mm × 80\,mm，
+重量约 1.2\,kg，适合放置于床头或桌面使用。
+
+\textbf{需要补充的照片：}
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item RK3588 开发板实物正面全景照
+  \item RK3588 开发板背面接口特写照
+  \item 系统整体组装完成后的正面照（含显示器）
+  \item 系统整体组装完成后的斜 45° 全景照
+\end{itemize}
+
+% ──────────────────────────────────────────────────────────
+% 2.2.3 电路各模块介绍
+% ──────────────────────────────────────────────────────────
+\subsubsection{电路各模块介绍}
+
+系统电路包含以下核心模块（图~\ref{fig:circuit-block}）：
+
+\begin{enumerate}[leftmargin=2em, itemsep=2pt]
+  \item \textbf{音频处理模块}：基于 nau8822 音频编解码器，支持 I2S 数字音频接口，
+    双通道麦克风输入（采样率 16kHz/16bit），单声道扬声器输出（通过 3.5mm 耳机接口）。
+    系统针对 nau8822 芯片特性做了右声道固定选择优化。
+
+  \item \textbf{视频采集模块}：USB 摄像头通过 USB 2.0 接口连接，
+    支持 MJPEG 格式实时流（15fps，1280×720）与静态快照采集。
+    系统实现 OpenCV 优先 + fswebcam 备选的双引擎容错机制。
+
+  \item \textbf{显示输出模块}：通过 HDMI 2.0 接口驱动外部显示器，
+    支持 1920×1080 分辨率全屏显示（Kiosk 模式），前端 Vue3 应用以 60fps 帧率渲染。
+
+  \item \textbf{无线通信模块}：集成 Wi-Fi 6 与蓝牙 5.0，Wi-Fi 用于云端 API 通信，
+    蓝牙用于近距离设备配对（可选扩展），同时通过 Garmin Connect API 实现远程体征数据同步。
+
+  \item \textbf{电源管理模块}：支持 DC 12V 供电与 USB-C PD 供电，
+    板载 PMIC 提供多轨电压输出，为 CPU/NPU/GPU/内存等核心组件供电。
+\end{enumerate}
+
+% ── 电路模块框图 ──────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm and 0.8cm,
+    every node/.style={font=\footnotesize},
+    ic/.style={draw, rectangle, rounded corners=4pt, minimum height=0.9cm,
+               minimum width=2.4cm, align=center, thick},
+    codec/.style={ic, fill=edgegreen!12, draw=edgegreen},
+    camera/.style={ic, fill=sensororange!12, draw=sensororange},
+    hdmi/.style={ic, fill=cloudpurple!12, draw=cloudpurple},
+    radio/.style={ic, fill=npugold!12, draw=npugold},
+    pmic/.style={ic, fill=alertred!12, draw=alertred},
+    arr/.style={-{Stealth[length=4pt]}, thick, draw=gray!60},
+]
+
+\node[ic, fill=coreblue!15, draw=coreblue, minimum width=5cm] (soc) {
+    \textbf{RK3588 SoC}\\[2pt]
+    {\tiny CPU + NPU + GPU + DDR4}
+};
+
+\node[codec, left=of soc] (nau) {\textbf{nau8822}\\[2pt]\tiny 音频编解码器};
+\node[camera, above=of soc] (cam) {\textbf{USB 摄像头}\\[2pt]\tiny UVC 协议};
+\node[hdmi, right=of soc] (hdmi) {\textbf{HDMI 控制器}\\[2pt]\tiny 视频输出};
+\node[radio, below=of soc] (wifi) {\textbf{Wi-Fi 6 / BLE}\\[2pt]\tiny 无线通信};
+\node[pmic, left=of wifi] (power) {\textbf{PMIC}\\[2pt]\tiny 电源管理};
+
+% 连线与信号标注
+\draw[arr] (nau) -- node[above, font=\tiny]{I2S} (soc.west);
+\draw[arr] (cam) -- node[right, font=\tiny]{USB 2.0} (soc.north);
+\draw[arr] (soc.east) -- node[above, font=\tiny]{MIPI-DSI} (hdmi);
+\draw[arr] (soc.south) -- node[right, font=\tiny]{PCIe} (wifi);
+\draw[arr] (power) -- node[above, font=\tiny]{DC 12V} (soc.south west);
+
+% 外设连接
+\node[font=\tiny, left=0.4cm of nau] {\textbf{麦克风}\\(I2S IN)};
+\node[font=\tiny, below=0.3cm of nau] {\textbf{扬声器}\\(I2S OUT)};
+\node[font=\tiny, right=0.5cm of hdmi] {\textbf{显示器}\\(HDMI 2.0)};
+\node[font=\tiny, right=0.5cm of wifi] {\textbf{互联网/Garmin}\\(Wi-Fi/BLE)};
+
+\end{tikzpicture}
+\caption{电路核心模块框图（标注关键信号接口）}
+\label{fig:circuit-block}
+\end{figure}
+
+\newpage
+
+% ──────────────────────────────────────────────────────────
+% 2.3 软件系统介绍
+% ──────────────────────────────────────────────────────────
+\subsection{软件系统介绍}
+
+% ──────────────────────────────────────────────────────────
+% 2.3.1 软件整体介绍
+% ──────────────────────────────────────────────────────────
+\subsubsection{软件整体介绍}
+
+系统软件采用\textbf{前后端分离 + 微服务架构}（图~\ref{fig:software-arch}），
+基于 Python FastAPI 构建后端服务，Vue 3 + Element Plus 构建前端界面，
+SQLite 作为本地数据库，FAISS 作为向量检索引擎。
+
+后端采用\textbf{模块化微服务}设计，共包含 26 个独立服务模块，通过 FastAPI Router
+暴露 RESTful API，主要包括：
+- 用户档案管理（用户 CRUD、健康数据查询）
+- 药物管理（药物 CRUD、用药计划）
+- 病例管理（病例 CRUD、检查/处方/随访/附件）
+- 健康仪表盘（统计数据、趋势分析）
+- AI 问诊（文本/语音/视觉问诊、RAG 检索）
+- 设备控制（唤醒、录音、拍照、TTS、提醒）
+- 佳明手表数据同步
+
+前端采用\textbf{双端自适应}设计：横屏大屏模式（Kiosk）面向老人端，
+竖屏移动端面向家属端，通过路由守卫自动切换，无需额外开发两套代码。
+
+% ── 软件整体架构图 ────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm and 0.5cm,
+    every node/.style={font=\footnotesize},
+    layer/.style={draw, rounded corners=4pt, minimum height=0.9cm,
+                  minimum width=3cm, align=center, thick},
+    fe/.style={layer, fill=cloudpurple!12, draw=cloudpurple},
+    api/.style={layer, fill=coreblue!15, draw=coreblue},
+    service/.style={layer, fill=edgegreen!12, draw=edgegreen},
+    data/.style={layer, fill=npugold!12, draw=npugold},
+    ai/.style={layer, fill=sensororange!12, draw=sensororange},
+    arr/.style={-{Stealth[length=4pt]}, thick, draw=gray!60},
+]
+
+% 前端层
+\node[fe] (kiosk) {大屏老人端\\Vue3 Kiosk};
+\node[fe, right=of kiosk] (mobile) {手机家属端\\响应式浏览器};
+
+% API 路由层
+\node[api, below=0.8cm of kiosk] (users) {Users Router\\档案管理};
+\node[api, right=of users] (meds) {Medications Router\\药物管理};
+\node[api, right=of meds] (chat) {Chat Router\\AI 问诊};
+\node[api, right=of chat] (device) {Device Router\\设备控制};
+
+% 服务层
+\node[service, below=0.8cm of users] (chatSvc) {ChatService\\对话管理};
+\node[service, right=of chatSvc] (prompt) {PromptBuilder\\意图路由};
+\node[service, right=of prompt] (rag) {RagService\\知识检索};
+\node[service, right=of rag] (reminder) {ReminderService\\用药提醒};
+
+% AI/数据层
+\node[ai, below=0.8cm of chatSvc] (kws) {KWS\\Sherpa-ONNX};
+\node[ai, right=of kws] (asr) {ASR\\SenseVoice};
+\node[ai, right=of asr] (llm) {LLM\\Qwen2 NPU};
+\node[ai, right=of llm] (tts) {TTS\\Piper};
+
+\node[data, below=0.8cm of prompt] (sqlite) {SQLite\\病历/用药/会话};
+\node[data, right=of sqlite] (faiss) {FAISS\\向量索引};
+\node[data, right=of faiss] (garmin) {Garmin API\\健康数据};
+
+% 连线
+\draw[arr] (kiosk) -- (users);
+\draw[arr] (kiosk) -- (meds);
+\draw[arr] (kiosk) -- (chat);
+\draw[arr] (kiosk) -- (device);
+\draw[arr] (mobile) -- (users);
+\draw[arr] (mobile) -- (meds);
+
+\draw[arr] (users) -- (chatSvc);
+\draw[arr] (meds) -- (reminder);
+\draw[arr] (chat) -- (chatSvc);
+\draw[arr] (device) -- (kws);
+\draw[arr] (device) -- (asr);
+\draw[arr] (device) -- (tts);
+
+\draw[arr] (chatSvc) -- (prompt);
+\draw[arr] (chatSvc) -- (rag);
+\draw[arr] (prompt) -- (llm);
+\draw[arr] (rag) -- (llm);
+\draw[arr] (llm) -- (tts);
+
+\draw[arr] (chatSvc) -- (sqlite);
+\draw[arr] (rag) -- (faiss);
+\draw[arr] (reminder) -- (sqlite);
+
+\end{tikzpicture}
+\caption{软件整体架构（前后端分离 + 微服务）}
+\label{fig:software-arch}
+\end{figure}
+
+% ──────────────────────────────────────────────────────────
+% 2.3.2 软件各模块介绍（流程图 + 关键I/O）
+% ──────────────────────────────────────────────────────────
+\subsubsection{软件各模块介绍}
+
+以下为系统核心软件模块的详细流程图与关键输入输出说明。
+
+% ── (1) 语音问诊全链路流程图 ──────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 0.3cm,
+    every node/.style={font=\scriptsize},
+    step/.style={draw, rounded corners=3pt, minimum height=0.8cm,
+                 minimum width=1.8cm, align=center, thick},
+    local/.style={step, fill=edgegreen!12, draw=edgegreen},
+    npu/.style={step, fill=npugold!12, draw=npugold},
+    api/.style={step, fill=coreblue!12, draw=coreblue},
+    out/.style={step, fill=alertred!10, draw=alertred},
+    arr/.style={-{Stealth[length=3pt]}, thick, draw=gray!60},
+    io/.style={font=\tiny, color=gray!70, text width=2cm, align=center},
+]
+
+\node[local] (w1) {KWS 监听};
+\node[io, left=0.4cm of w1] {\textbf{输入}:\\麦克风音频流\\\textbf{输出}:\\唤醒词触发};
+\node[local, right=of w1] (w2) {TTS 应答};
+\node[local, right=of w2] (w3) {录音 6s};
+\node[local, right=of w3] (w4) {ASR 识别};
+\node[io, right=0.4cm of w4] {\textbf{输入}:\\6s 音频\\\textbf{输出}:\\识别文本};
+\node[api, right=of w4] (w5) {意图路由};
+\node[api, right=of w5] (w6) {RAG 检索};
+\node[npu, right=of w6] (w7) {Qwen2 NPU};
+\node[io, right=0.4cm of w7] {\textbf{输入}:\\Prompt + RAG\\\textbf{输出}:\\流式回答};
+\node[local, right=of w7] (w8) {Piper TTS};
+\node[out, right=of w8] (w9) {数字人播报};
+
+\draw[arr] (w1) -- node[above, font=\tiny]{"小医"} (w2);
+\draw[arr] (w2) -- (w3);
+\draw[arr] (w3) -- (w4);
+\draw[arr] (w4) -- (w5);
+\draw[arr] (w5) -- (w6);
+\draw[arr] (w6) -- (w7);
+\draw[arr] (w7) -- (w8);
+\draw[arr] (w8) -- (w9);
+
+% 耗时标注
+\node[font=\tiny, color=edgegreen, below=0.1cm of w1] {560ms};
+\node[font=\tiny, color=edgegreen, below=0.1cm of w4] {242ms};
+\node[font=\tiny, color=edgegreen, below=0.1cm of w6] {68ms};
+\node[font=\tiny, color=npugold, below=0.1cm of w7] {12.5s};
+\node[font=\tiny, color=edgegreen, below=0.1cm of w8] {1.1s};
+
+\end{tikzpicture}
+\caption{语音问诊全链路流程图（标注关键 I/O 与耗时）}
+\label{fig:flow-chat}
+\end{figure}
+
+% ── (2) 拍照识药流程图 ────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 0.4cm,
+    every node/.style={font=\scriptsize},
+    step/.style={draw, rounded corners=3pt, minimum height=0.8cm,
+                 minimum width=2.0cm, align=center, thick},
+    local/.style={step, fill=edgegreen!12, draw=edgegreen},
+    cloud/.style={step, fill=cloudpurple!12, draw=cloudpurple},
+    api/.style={step, fill=coreblue!12, draw=coreblue},
+    out/.style={step, fill=alertred!10, draw=alertred},
+    arr/.style={-{Stealth[length=3pt]}, thick, draw=gray!60},
+    io/.style={font=\tiny, color=gray!70, text width=2cm, align=center},
+]
+
+\node[local] (p1) {摄像头采集};
+\node[io, left=0.4cm of p1] {\textbf{输入}:\\USB 摄像头\\\textbf{输出}:\\1280×720 图像};
+\node[local, right=of p1] (p2) {图像预处理};
+\node[cloud, right=of p2] (p3) {Qwen-VL-Max};
+\node[io, right=0.4cm of p3] {\textbf{输入}:\\Base64 图像\\\textbf{输出}:\\药名+规格(JSON)};
+\node[api, right=of p3] (p4) {知识库匹配};
+\node[api, right=of p4] (p5) {用药核验};
+\node[io, right=0.4cm of p5] {\textbf{输入}:\\待服药物列表\\\textbf{输出}:\\匹配结果};
+\node[out, right=of p5] (p6) {TTS 播报};
+\node[out, right=of p6] (p7) {标记已服};
+
+\draw[arr] (p1) -- (p2);
+\draw[arr] (p2) -- (p3);
+\draw[arr] (p3) -- (p4);
+\draw[arr] (p4) -- (p5);
+\draw[arr] (p5) -- node[above, font=\tiny]{匹配成功} (p6);
+\draw[arr] (p6) -- (p7);
+\draw[arr, dashed, draw=alertred!60] (p5) -- node[above, font=\tiny]{匹配失败} ++(0,0.6)
+    node[above, font=\tiny, color=alertred]{语音警告};
+
+\end{tikzpicture}
+\caption{拍照识药流程图（标注关键 I/O）}
+\label{fig:flow-photo}
+\end{figure}
+
+% ── (3) 用药提醒调度流程图 ────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 0.4cm,
+    every node/.style={font=\scriptsize},
+    step/.style={draw, rounded corners=3pt, minimum height=0.8cm,
+                 minimum width=2.0cm, align=center, thick},
+    api/.style={step, fill=coreblue!12, draw=coreblue},
+    out/.style={step, fill=alertred!10, draw=alertred},
+    arr/.style={-{Stealth[length=3pt]}, thick, draw=gray!60},
+    loop/.style={font=\tiny, color=gray!60},
+]
+
+\node[api] (r1) {定时轮询\\(15s 间隔)};
+\node[api, right=of r1] (r2) {查询待服药物};
+\node[api, right=of r2] (r3) {判断到点?};
+\node[out, right=of r3] (r4) {TTS 语音提醒};
+\node[out, right=of r4] (r5) {前端弹窗};
+\node[api, right=of r5] (r6) {等待确认};
+\node[api, right=of r6] (r7) {已确认?};
+\node[out, right=of r7] (r8) {标记已服};
+\node[out, below=0.6cm of r6] (r9) {微信推送家属};
+
+\draw[arr] (r1) -- (r2);
+\draw[arr] (r2) -- (r3);
+\draw[arr] (r3) -- node[above, font=\tiny]{是} (r4);
+\draw[arr] (r3) -- node[below, font=\tiny]{否} (r1);
+\draw[arr] (r4) -- (r5);
+\draw[arr] (r5) -- (r6);
+\draw[arr] (r6) -- (r7);
+\draw[arr] (r7) -- node[above, font=\tiny]{是} (r8);
+\draw[arr] (r7) -- node[below, font=\tiny]{否\\逾期15min} (r9);
+\draw[arr, dashed] (r9) -- (r6);
+
+\node[loop, below=0.2cm of r6] {\tiny 未确认每 45s 重复提醒};
+
+\end{tikzpicture}
+\caption{用药提醒调度流程图}
+\label{fig:flow-reminder}
+\end{figure}
+
+% ── (4) RAG 检索流程图 ────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 0.4cm,
+    every node/.style={font=\scriptsize},
+    step/.style={draw, rounded corners=3pt, minimum height=0.8cm,
+                 minimum width=2.0cm, align=center, thick},
+    local/.style={step, fill=edgegreen!12, draw=edgegreen},
+    api/.style={step, fill=coreblue!12, draw=coreblue},
+    arr/.style={-{Stealth[length=3pt]}, thick, draw=gray!60},
+    io/.style={font=\tiny, color=gray!70, text width=2cm, align=center},
+]
+
+\node[api] (rg1) {用户问题输入};
+\node[io, left=0.4cm of rg1] {\textbf{输入}:\\自然语言问题\\\textbf{输出}:\\问题文本};
+\node[local, right=of rg1] (rg2) {BGE Embedding};
+\node[local, right=of rg2] (rg3) {FAISS 检索};
+\node[io, right=0.4cm of rg3] {\textbf{输入}:\\768维向量\\\textbf{输出}:\\Top3 文档块};
+\node[api, right=of rg3] (rg4) {知识排序过滤};
+\node[api, right=of rg4] (rg5) {拼接 Prompt};
+\node[io, right=0.4cm of rg5] {\textbf{输出}:\\含 RAG 的完整 Prompt};
+
+\draw[arr] (rg1) -- (rg2);
+\draw[arr] (rg2) -- (rg3);
+\draw[arr] (rg3) -- (rg4);
+\draw[arr] (rg4) -- (rg5);
+
+\end{tikzpicture}
+\caption{RAG 知识检索流程图（标注关键 I/O）}
+\label{fig:flow-rag}
+\end{figure}
+
+% ── (5) 意图路由 Prompt 构建流程图 ────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 0.4cm,
+    every node/.style={font=\scriptsize},
+    step/.style={draw, rounded corners=3pt, minimum height=0.8cm,
+                 minimum width=2.2cm, align=center, thick},
+    api/.style={step, fill=coreblue!12, draw=coreblue},
+    npu/.style={step, fill=npugold!12, draw=npugold},
+    arr/.style={-{Stealth[length=3pt]}, thick, draw=gray!60},
+]
+
+\node[api] (pb1) {用户问题};
+\node[api, right=of pb1] (pb2) {\textbf{意图分类}\\\\MEDICAL/MEDICATION/CASUAL};
+\node[api, right=of pb2] (pb3) {\textbf{查询改写}\\\\指代消解};
+
+\node[api, right=of pb3] (pb4) {\textbf{上下文注入}\\\\患者信息+病例+服药};
+\node[api, right=of pb4] (pb5) {\textbf{RAG 检索}\\\\Top3 知识片段};
+\node[npu, right=of pb5] (pb6) {\textbf{Prompt 组装}\\\\10 段式结构化};
+
+\draw[arr] (pb1) -- (pb2);
+\draw[arr] (pb2) -- (pb3);
+\draw[arr] (pb3) -- (pb4);
+\draw[arr] (pb4) -- (pb5);
+\draw[arr] (pb5) -- (pb6);
+
+% 分支条件
+\draw[arr, dashed, draw=gray!50] (pb2.south) -- ++(0,-0.6)
+    node[below, font=\tiny, align=center]{CASUAL: 仅基本信息\\MEDICAL: 全量上下文\\MEDICATION: 强化药物信息};
+
+\end{tikzpicture}
+\caption{意图路由 Prompt 构建流程图}
+\label{fig:flow-prompt}
+\end{figure}
+
+% ── (6) KWS 守护线程架构图 ────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm and 0.5cm,
+    every node/.style={font=\scriptsize},
+    proc/.style={draw, rectangle, rounded corners=5pt, minimum height=1.2cm,
+                 minimum width=3cm, align=center, thick},
+    thread/.style={draw, rounded corners=3pt, minimum height=0.9cm,
+                   minimum width=2.2cm, align=center, thick},
+    arr/.style={-{Stealth[length=3pt]}, thick, draw=gray!60},
+]
+
+\node[proc, fill=coreblue!15, draw=coreblue] (main) {\textbf{FastAPI 主进程}};
+
+\node[thread, fill=edgegreen!12, draw=edgegreen, below left=0.8cm and 0.5cm of main]
+    (kwsWorker) {\textbf{KWS Worker}\\\\Sherpa-ONNX C++ 进程};
+\node[thread, fill=sensororange!12, draw=sensororange, below right=0.8cm and 0.5cm of main]
+    (wakeThread) {\textbf{唤醒守护线程}\\\\asyncio Event};
+
+\node[proc, fill=npugold!12, draw=npugold, below=0.8cm of kwsWorker]
+    (arecord) {\textbf{arecord}\\\\持续音频采集};
+
+\draw[arr] (arecord) -- node[right, font=\tiny]{RAW 音频流} (kwsWorker);
+\draw[arr] (kwsWorker) -- node[above, font=\tiny]{唤醒事件} (wakeThread);
+\draw[arr] (wakeThread) -- node[above, font=\tiny]{HTTP 响应} (main);
+
+\node[font=\tiny, color=gray!60, left=0.3cm of arecord] {ALSA\\plughw:1,0};
+\node[font=\tiny, color=gray!60, right=0.3cm of wakeThread] {HTTP 会话\\等待唤醒};
+
+\end{tikzpicture}
+\caption{KWS 守护线程架构图（单进程独占麦克风）}
+\label{fig:flow-kws}
+\end{figure}
+
+\newpage
+
+% ══════════════════════════════════════════════════════════
+%  需要补充的照片清单
+% ══════════════════════════════════════════════════════════
+\section*{需要补充的照片清单}
+
+以下为完成第二部分"系统组成及功能说明"所需的实物照片，建议按以下清单准备：
+
+\begin{enumerate}[leftmargin=2em, itemsep=4pt]
+
+  \item \textbf{RK3588 开发板实物照片}
+    \begin{itemize}[leftmargin=1.5em]
+      \item 开发板正面全景照（斜 45°）
+      \item 开发板背面接口特写照（标注 USB/HDMI/音频接口）
+    \end{itemize}
+
+  \item \textbf{系统整体组装照片}
+    \begin{itemize}[leftmargin=1.5em]
+      \item 完整系统正面照（含显示器、麦克风、摄像头）
+      \item 完整系统斜 45° 全景照
+      \item 外设连接特写（USB 线、HDMI 线、音频线）
+    \end{itemize}
+
+  \item \textbf{软件界面截图}
+    \begin{itemize}[leftmargin=1.5em]
+      \item Dashboard 健康看板首页（大屏 Kiosk 模式）
+      \item AI 问诊页面（含四态数字人）
+      \item 拍照识药页面（含摄像头实时预览）
+      \item 用药提醒弹窗页面
+      \item 手机家属端页面（移动端适配）
+      \item 设备状态页面（显示各组件在线状态）
+    \end{itemize}
+
+  \item \textbf{功能演示照片}
+    \begin{itemize}[leftmargin=1.5em]
+      \item 语音问诊操作演示（老人与系统交互）
+      \item 拍照识药演示（手持药盒拍照）
+      \item 用药提醒确认操作
+    \end{itemize}
+
+  \item \textbf{性能测试照片（可选）}
+    \begin{itemize}[leftmargin=1.5em]
+      \item 终端运行 benchmark 测试的界面
+      \item 系统资源监控（CPU/内存/温度）界面
+    \end{itemize}
+
+\end{enumerate}
+
+\noindent\textbf{照片格式要求：}JPEG/PNG 格式，分辨率不低于 1920×1080，
+文件名建议包含场景描述（如 `hardware_rk3588_front.jpg`、`ui_dashboard.png`）。
+
+\end{document}

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AI 私人医生 · 全屏健康屏
+Comment=开机自动启动后端/前端并全屏 kiosk 打开健康屏
+Exec=/home/elf/AI-Personal-Doctor/scripts/launch-health-screen.sh
+Icon=utilities-terminal
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5
+NoDisplay=false

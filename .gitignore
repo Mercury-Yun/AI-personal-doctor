@@ -1,0 +1,15 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.venv/
+ai_doctor.db
+.env
+.env.bak*
+.garmin_tokens/
+npm-debug.log*
+backend/rag_cache/
+logs/
+_deploy/
+_sync_tmp/
+/home/

@@ -1,0 +1,9 @@
+# RK3588 板端：复用系统已安装的 torch/numpy，只装后端缺失依赖
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+SQLAlchemy==2.0.36
+pydantic==2.10.4
+faiss-cpu==1.14.3
+sentence-transformers==2.7.0
+transformers==4.41.2
+huggingface-hub==0.23.5
